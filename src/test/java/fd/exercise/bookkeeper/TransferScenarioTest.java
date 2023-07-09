@@ -11,7 +11,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import fd.exercise.bookkeeper.api.dtos.AccountDto;
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.concurrent.Callable;
+import java.util.concurrent.Executors;
+import java.util.stream.IntStream;
 import lombok.SneakyThrows;
+import lombok.extern.slf4j.Slf4j;
 import org.assertj.core.matcher.AssertionMatcher;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -22,6 +26,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers;
 
+@Slf4j
 @SpringBootTest(webEnvironment = RANDOM_PORT)
 @AutoConfigureMockMvc
 class TransferScenarioTest {
@@ -44,6 +49,26 @@ class TransferScenarioTest {
     // then
     assertAccountBalance(SOURCE, -49.8766);
     assertAccountBalance(DESTINATION, 100);
+  }
+
+  @Test
+  void concurrentTransfersScenario() throws Exception {
+    // given
+    createAccount(SOURCE, "1000");
+    createAccount(DESTINATION, "0");
+
+    List<Callable<Void>> concurrentTransfers = IntStream.range(0, 1000).boxed().map(i -> (Callable<Void>) () -> {
+          performTransfer(SOURCE, DESTINATION, "1");
+          return null;
+        })
+        .toList();
+
+    // when
+    Executors.newFixedThreadPool(100).invokeAll(concurrentTransfers);
+
+    // then
+    assertAccountBalance(SOURCE, 0);
+    assertAccountBalance(DESTINATION, 1000);
   }
 
   private void createAccount(String accountNumber, String balance) throws Exception {
